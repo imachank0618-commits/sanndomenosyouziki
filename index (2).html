@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>話した言葉が歩くテキストアート</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<h1>話した言葉が歩くテキストアート</h1>
+<p>「認識開始」ボタンを押してマイクに話しかけてみてください。</p>
+<div id="controls">
+    <button id="startButton">認識開始</button>
+    <button id="stopButton" disabled>認識停止</button>
+</div>
+<div id="canvas"></div>
+
+<script>
+// --- 1. 音声認識APIの準備 ---
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (!SpeechRecognition) {
+    alert("お使いのブラウザは音声認識に対応していません。Google Chromeなどでお試しください。");
+}
+
+const recognition = new SpeechRecognition();
+recognition.lang = 'ja-JP';
+recognition.interimResults = false;
+recognition.continuous = true;
+
+// --- 2. HTML要素の取得 ---
+const startButton = document.getElementById('startButton');
+const stopButton = document.getElementById('stopButton');
+const canvas = document.getElementById('canvas');
+
+let walkingTexts = [];
+let isRecognizing = false;
+
+// --- 3. ボタンのイベント設定 ---
+startButton.onclick = () => {
+    try {
+        isRecognizing = true;
+        recognition.start();
+        startButton.disabled = true;
+        stopButton.disabled = false;
+        console.log("音声認識を開始しました。");
+    } catch (error) {
+        console.error("認識開始エラー:", error);
+        isRecognizing = false;
+    }
+};
+
+stopButton.onclick = () => {
+    isRecognizing = false;
+    recognition.stop();
+    startButton.disabled = false;
+    stopButton.disabled = true;
+    console.log("音声認識を停止しました。");
+};
+
+// --- 4. 音声認識のイベント処理 ---
+recognition.onresult = (event) => {
+    const transcript = event.results[event.results.length - 1][0].transcript;
+    console.log('認識結果:', transcript);
+    createTextElement(transcript.trim());
+};
+
+recognition.onend = () => {
+    console.log("onendイベントが発生しました。");
+    if (isRecognizing) {
+        console.log("自動再開します。");
+        setTimeout(() => {
+            try {
+                recognition.start();
+            } catch (e) {
+                console.error("再開に失敗しました:", e);
+                isRecognizing = false;
+                startButton.disabled = false;
+                stopButton.disabled = true;
+            }
+        }, 100);
+    }
+};
+
+recognition.onerror = (event) => {
+    console.error('音声認識エラー:', event.error);
+    if (event.error !== 'no-speech') {
+        isRecognizing = false;
+        startButton.disabled = false;
+        stopButton.disabled = true;
+    }
+};
+
+// --- 5. テキストアートの生成とアニメーション ---
+function createTextElement(text) {
+    if (!text) return;
+    const textElement = document.createElement('span');
+    textElement.className = 'walking-text';
+    textElement.textContent = text;
+    canvas.appendChild(textElement);
+    
+    const canvasRect = canvas.getBoundingClientRect();
+    const textRect = textElement.getBoundingClientRect();
+
+    const textObj = {
+        element: textElement,
+        x: Math.random() * (canvasRect.width - textRect.width),
+        y: Math.random() * (canvasRect.height - textRect.height),
+        vx: (Math.random() - 0.5) * 4,
+        vy: (Math.random() - 0.5) * 4,
+        color: `hsl(${Math.random() * 360}, 80%, 50%)`
+    };
+
+    textElement.style.left = `${textObj.x}px`;
+    textElement.style.top = `${textObj.y}px`;
+    textElement.style.color = textObj.color;
+    
+    walkingTexts.push(textObj);
+
+    if (walkingTexts.length > 50) {
+        const oldText = walkingTexts.shift();
+        canvas.removeChild(oldText.element);
+    }
+}
+
+function animate() {
+    const canvasRect = canvas.getBoundingClientRect();
+    walkingTexts.forEach(textObj => {
+        textObj.x += textObj.vx;
+        textObj.y += textObj.vy;
+        
+        const textRect = textObj.element.getBoundingClientRect();
+        if (textObj.x <= 0 || textObj.x + textRect.width >= canvasRect.width) {
+            textObj.vx *= -1;
+        }
+        if (textObj.y <= 0 || textObj.y + textRect.height >= canvasRect.height) {
+            textObj.vy *= -1;
+        }
+
+        textObj.element.style.left = `${textObj.x}px`;
+        textObj.element.style.top = `${textObj.y}px`;
+    });
+    requestAnimationFrame(animate);
+}
+animate();
+</script>
+
+</body>
+</html>
